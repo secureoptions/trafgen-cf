@@ -1,0 +1,40 @@
+# Make sure there is a target specified for the script, and parse it
+if [ $# -eq 0 ]
+then
+    echo ""
+    echo "$0: You must set a target IP to run traffic generator against"
+    echo ""
+else
+    IP=${1}
+fi
+
+DESTIP=$(echo $IP | sed 's/\./, /g')
+DESTIP=${DESTIP}", "
+
+# Get local private IP
+IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+
+SOURCEIP=$(echo $IP | sed 's/\./, /g')
+SOURCEIP=${SOURCEIP}", "
+
+# Get source MAC of Ec2 and convert it into hex
+MAC=$(curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | sed s'/.$//')
+
+for i in $(echo $MAC | sed "s/:/ /g")
+do
+    SOURCEMAC=${SOURCEMAC}"0x"${i}", "
+done
+
+# Get destination MAC of target and convert to hex
+MAC=$(arp -a | awk 'FNR==1 {print $4}')
+
+for i in $(echo $MAC | sed "s/:/ /g")
+do
+    DESTMAC=${DESTMAC}"0x"${i}", "
+done
+
+INTERFACE=$(ifconfig | awk 'FNR == 1 {print $1}')
+
+
+printf "{\n $DESTMAC\n $SOURCEMAC\n c16(0x0800),\n 0x45,0\n c16(1246),\n drnd(2),\n 0b01000000,0b00000000,\n 64,\n 17,\n csumip(14,33),\n $SOURCEIP\n $DESTIP\n c16($SOURCEPORT),\n c16($DESPORT),\n const16(1226),\n const16(0),\n fill('B', 1218),\n}" | trafgen --in - --out $INTERFACE --cpp
+
