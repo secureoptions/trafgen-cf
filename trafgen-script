@@ -1,7 +1,7 @@
 #!/bin/sh
 
 DESTIP=$(echo $IP | sed 's/\./, /g')
-DESTIP=${DESTIP}", "
+DESTIP=${DESTIP}", " 
 
 # Get local private IP
 IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
