@@ -1,12 +1,4 @@
-# Make sure there is a target specified for the script, and parse it
-if [ $# -eq 0 ]
-then
-    echo ""
-    echo "$0: You must set a target IP to run traffic generator against"
-    echo ""
-else
-    IP=${1}
-fi
+#!/bin/sh
 
 DESTIP=$(echo $IP | sed 's/\./, /g')
 DESTIP=${DESTIP}", "
