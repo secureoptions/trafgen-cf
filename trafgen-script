@@ -29,5 +29,5 @@ done
 INTERFACE=$(ifconfig | awk 'FNR == 1 {print $1}')
 
 
-printf "{\n $DESTMAC\n $SOURCEMAC\n c16(0x0800),\n 0x45,0\n c16(1490),\n drnd(2),\n 0b01000000,0b00000000,\n 64,\n 17,\n csumip(14,33),\n $SOURCEIP\n $DESTIP\n c16($SOURCEPORT),\n c16($DESTPORT),\n const16(1470),\n const16(0),\n fill('B', 1462),\n}" | trafgen --in - --out $INTERFACE --cpp
+printf "{\n $DESTMAC\n $SOURCEMAC\n c16(0x0800),\n 0x45,0\n c16(1490),\n drnd(2),\n 0b01000000,0b00000000,\n 64,\n 17,\n csumip(14,33),\n drnd(2)\n $DESTIP\n c16($SOURCEPORT),\n c16($DESTPORT),\n const16(1470),\n const16(0),\n fill('B', 1462),\n}" | trafgen --in - --out $INTERFACE --cpp
 
