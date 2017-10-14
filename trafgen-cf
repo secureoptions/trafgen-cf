@@ -43,10 +43,11 @@
 			"AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})"
 		},
 		"Type": {
-			"Description": "How much traffic to generate. Your answer here will determine the type and number of EC2s to launch which must be powerful enough to generate adequate traffic. If you choose 1G then one m4.4xlarge is deployed -- choosing 10G will deploy one m4.10xlarge and one m4.4xlarge -- choosing LAG will deploy four m4.10xlarges and one m4.4xlarge, and will generate up to (and sometimes above) 40Gbps of traffic",
+			"Description": "Specify how much traffic to generate in GB/s (max of 50 GB/s). Your answer will determine the number of m4.4xlarge EC2s to launch which must be powerful enough to generate adequate traffic. Note that you will be responsible for any EC2 charges which are incurred",
 			"Type": "String",
-			"Default": "1G",
-			"AllowedValues": ["1G", "10G", "LAG"]
+			"Default": "1",
+			"AllowedPattern": "([1-9]|[1-4][0-9]|50)",
+			"ConstraintDescription": "You must choose no more than 50GB of traffic"
 		},
 		"Subnet": {
 			"Description": "This is the subnet that you would like to launch the trafgen server in. Make sure that whatever subnet you choose uses a VPC table which has a route for the target over the Direct Connect **AND** has route out to the internet. This last route is needed so that the EC2 can download needed packages to run trafgen",
@@ -56,13 +57,7 @@
 			"Description": "The Security Group that you want to associate with the trafgen server. Make sure that your egress rules in this SG are allowing whatever (UDP) destination port you have configured.",
 			"Type": "AWS::EC2::SecurityGroup::Id"
 		},
-		"Sourceport": {
-			"Description": "The source port that trafgen will use. NOTE: it will always use UDP.",
-			"Type": "String",
-			"Default": "534",
-			"AllowedPattern": "(\\d{1,65535})",
-			"ConstraintDescription": "Must choose a valid source port"
-		},
+
 		"Destport": {
 			"Description": "The destination port that trafgen will use. NOTE: it will always be UDP.",
 			"Type": "String",
@@ -119,100 +114,24 @@
 
 		}
 	},
-	"Conditions": {
-		"Lag": {
-			"Fn::Equals": [{
-					"Ref": "Type"
-				},
-				"LAG"
-			]
-		},
-		"10Gig": {
-			"Fn::Equals": [{
-					"Ref": "Type"
-				},
-				"10G"
-			]
-		},
-		"1Gig": {
-			"Fn::Equals": [{
-					"Ref": "Type"
-				},
-				"1G"
-			]
-		}
-	},
 
 	"Resources": {
-		"Trafgen1": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "1Gig",
+
+		"Launchconfig": {
+			"Type": "AWS::AutoScaling::LaunchConfiguration",
 			"Properties": {
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": ["", [
-								"#!/bin/bash -xe\n",
-								"# Set environment variables\n",
-								"export IP=", {
-									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
-								},
-								"\n",
-								"# Install necessary packages\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get update -y --no-install-recommends\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends\n",
-								"apt-get install netsniff-ng -y\n",
-								"apt-get install cpp -y\n",
-								"wget https://raw.githubusercontent.com/secureoptions/trafgen-cf/master/trafgen-script\n",
-								"# Make trafgen script executable\n",
-								"chmod u+x trafgen-script\n",
-								"# Run the script\n",
-								"/bin/sh trafgen-script\n"
-							]]
-					}
-				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
+				"AssociatePublicIpAddress": "True",
 				"ImageId": {
 					"Fn::FindInMap": ["RegionMap", {
 							"Ref": "AWS::Region"
 						}, "Ubuntu"]
 				},
+				"InstanceMonitoring": "True",
 				"InstanceType": "m4.4xlarge",
-				"Monitoring": "true",
-				"Tags": [{
-						"Key": "Name",
-						"Value": "TrafficGenerator-1"
+				"SecurityGroups": [{
+						"Ref": "Sg"
 					}
 				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-1",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
-					}
-				]
-
-			}
-		},
-		"Trafgen2": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "Lag",
-			"Properties": {
 				"UserData": {
 					"Fn::Base64": {
 						"Fn::Join": ["", [
@@ -220,10 +139,6 @@
 								"# Set environment variables\n",
 								"export IP=", {
 									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
 								},
 								"\n",
 								"export DESTPORT=", {
@@ -242,429 +157,38 @@
 								"/bin/sh trafgen-script\n"
 							]]
 					}
-				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
-				"ImageId": {
-					"Fn::FindInMap": ["RegionMap", {
-							"Ref": "AWS::Region"
-						}, "Ubuntu"]
-				},
-				"InstanceType": "m4.10xlarge",
-				"Monitoring": "true",
-				"Tags": [{
-						"Key": "Name",
-						"Value": "TrafficGenerator-2"
-					}
-				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-2",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
-					}
-				]
-
+				}
 			}
 		},
-		"Trafgen3": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "Lag",
+		"Asgroup": {
+			"Type": "AWS::AutoScaling::AutoScalingGroup",
 			"Properties": {
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": ["", [
-								"#!/bin/bash -xe\n",
-								"# Set environment variables\n",
-								"export IP=", {
-									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
-								},
-								"\n",
-								"# Install necessary packages\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get update -y --no-install-recommends\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends\n",
-								"apt-get install netsniff-ng -y\n",
-								"apt-get install cpp -y\n",
-								"wget https://raw.githubusercontent.com/secureoptions/trafgen-cf/master/trafgen-script\n",
-								"# Make trafgen script executable\n",
-								"chmod u+x trafgen-script\n",
-								"# Run the script\n",
-								"/bin/sh trafgen-script\n"
-							]]
-					}
+				"Cooldown": "0",
+				"DesiredCapacity": {
+					"Ref": "Type"
 				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
-				"ImageId": {
-					"Fn::FindInMap": ["RegionMap", {
-							"Ref": "AWS::Region"
-						}, "Ubuntu"]
+				"HealthCheckGracePeriod": "300",
+				"HealthCheckType": "EC2",
+				"LaunchConfigurationName": {
+					"Ref": "Launchconfig"
 				},
-				"InstanceType": "m4.10xlarge",
-				"Monitoring": "true",
+				"MaxSize": {
+					"Ref": "Type"
+				},
+				"MinSize": {
+					"Ref": "Type"
+				},
 				"Tags": [{
 						"Key": "Name",
-						"Value": "TrafficGenerator-3"
+						"Value": "TrafficGenerator",
+						"PropagateAtLaunch": "True"
 					}
 				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-3",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
+				"VPCZoneIdentifier": [{
+						"Ref": "Subnet"
 					}
 				]
-
-			}
-		},
-		"Trafgen4": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "Lag",
-			"Properties": {
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": ["", [
-								"#!/bin/bash -xe\n",
-								"# Set environment variables\n",
-								"export IP=", {
-									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
-								},
-								"\n",
-								"# Install necessary packages\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get update -y --no-install-recommends\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends\n",
-								"apt-get install netsniff-ng -y\n",
-								"apt-get install cpp -y\n",
-								"wget https://raw.githubusercontent.com/secureoptions/trafgen-cf/master/trafgen-script\n",
-								"# Make trafgen script executable\n",
-								"chmod u+x trafgen-script\n",
-								"# Run the script\n",
-								"/bin/sh trafgen-script\n"
-							]]
-					}
-				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
-				"ImageId": {
-					"Fn::FindInMap": ["RegionMap", {
-							"Ref": "AWS::Region"
-						}, "Ubuntu"]
-				},
-				"InstanceType": "m4.10xlarge",
-				"Monitoring": "true",
-				"Tags": [{
-						"Key": "Name",
-						"Value": "TrafficGenerator-4"
-					}
-				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-4",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
-					}
-				]
-
-			}
-		},
-		"Trafgen5": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "Lag",
-			"Properties": {
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": ["", [
-								"#!/bin/bash -xe\n",
-								"# Set environment variables\n",
-								"export IP=", {
-									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
-								},
-								"\n",
-								"# Install necessary packages\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get update -y --no-install-recommends\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends\n",
-								"apt-get install netsniff-ng -y\n",
-								"apt-get install cpp -y\n",
-								"wget https://raw.githubusercontent.com/secureoptions/trafgen-cf/master/trafgen-script\n",
-								"# Make trafgen script executable\n",
-								"chmod u+x trafgen-script\n",
-								"# Run the script\n",
-								"/bin/sh trafgen-script\n"
-							]]
-					}
-				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
-				"ImageId": {
-					"Fn::FindInMap": ["RegionMap", {
-							"Ref": "AWS::Region"
-						}, "Ubuntu"]
-				},
-				"InstanceType": "m4.4xlarge",
-				"Monitoring": "true",
-				"Tags": [{
-						"Key": "Name",
-						"Value": "TrafficGenerator-5"
-					}
-				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-5",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
-					}
-				]
-
-			}
-		},
-		"Trafgen6": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "Lag",
-			"Properties": {
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": ["", [
-								"#!/bin/bash -xe\n",
-								"# Set environment variables\n",
-								"export IP=", {
-									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
-								},
-								"\n",
-								"# Install necessary packages\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get update -y --no-install-recommends\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends\n",
-								"apt-get install netsniff-ng -y\n",
-								"apt-get install cpp -y\n",
-								"wget https://raw.githubusercontent.com/secureoptions/trafgen-cf/master/trafgen-script\n",
-								"# Make trafgen script executable\n",
-								"chmod u+x trafgen-script\n",
-								"# Run the script\n",
-								"/bin/sh trafgen-script\n"
-							]]
-					}
-				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
-				"ImageId": {
-					"Fn::FindInMap": ["RegionMap", {
-							"Ref": "AWS::Region"
-						}, "Ubuntu"]
-				},
-				"InstanceType": "m4.10xlarge",
-				"Monitoring": "true",
-				"Tags": [{
-						"Key": "Name",
-						"Value": "TrafficGenerator-1"
-					}
-				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-1",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
-					}
-				]
-
-			}
-		},
-		"Trafgen7": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "10Gig",
-			"Properties": {
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": ["", [
-								"#!/bin/bash -xe\n",
-								"# Set environment variables\n",
-								"export IP=", {
-									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
-								},
-								"\n",
-								"# Install necessary packages\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get update -y --no-install-recommends\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends\n",
-								"apt-get install netsniff-ng -y\n",
-								"apt-get install cpp -y\n",
-								"wget https://raw.githubusercontent.com/secureoptions/trafgen-cf/master/trafgen-script\n",
-								"# Make trafgen script executable\n",
-								"chmod u+x trafgen-script\n",
-								"# Run the script\n",
-								"/bin/sh trafgen-script\n"
-							]]
-					}
-				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
-				"ImageId": {
-					"Fn::FindInMap": ["RegionMap", {
-							"Ref": "AWS::Region"
-						}, "Ubuntu"]
-				},
-				"InstanceType": "m4.10xlarge",
-				"Monitoring": "true",
-				"Tags": [{
-						"Key": "Name",
-						"Value": "TrafficGenerator-1"
-					}
-				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-1",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
-					}
-				]
-
-			}
-		},
-		"Trafgen8": {
-			"Type": "AWS::EC2::Instance",
-			"Condition": "10Gig",
-			"Properties": {
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": ["", [
-								"#!/bin/bash -xe\n",
-								"# Set environment variables\n",
-								"export IP=", {
-									"Ref": "Target"
-								},
-								"\n",
-								"export SOURCEPORT=", {
-									"Ref": "Sourceport"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
-								},
-								"\n",
-								"# Install necessary packages\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get update -y --no-install-recommends\n",
-								"DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends\n",
-								"apt-get install netsniff-ng -y\n",
-								"apt-get install cpp -y\n",
-								"wget https://raw.githubusercontent.com/secureoptions/trafgen-cf/master/trafgen-script\n",
-								"# Make trafgen script executable\n",
-								"chmod u+x trafgen-script\n",
-								"# Run the script\n",
-								"/bin/sh trafgen-script\n"
-							]]
-					}
-				},
-				"DisableApiTermination": "False",
-				"InstanceInitiatedShutdownBehavior": "stop",
-				"ImageId": {
-					"Fn::FindInMap": ["RegionMap", {
-							"Ref": "AWS::Region"
-						}, "Ubuntu"]
-				},
-				"InstanceType": "m4.4xlarge",
-				"Monitoring": "true",
-				"Tags": [{
-						"Key": "Name",
-						"Value": "TrafficGenerator-2"
-					}
-				],
-				"NetworkInterfaces": [{
-						"AssociatePublicIpAddress": "True",
-						"DeleteOnTermination": "true",
-						"Description": "Interface of TrafficGenerator-2",
-						"DeviceIndex": 0,
-						"SubnetId": {
-							"Ref": "Subnet"
-						},
-						"GroupSet": [{
-								"Ref": "Sg"
-							}
-						]
-					}
-				]
-
 			}
 		}
-
 	}
-
 }
