@@ -7,7 +7,7 @@
 					"Label": {
 						"default": "Configuration"
 					},
-					"Parameters": ["Target", "Type", "Subnet", "Sourceport", "Destport", "Sg"]
+					"Parameters": ["Target", "Type", "Subnet", "Sg"]
 				}
 			],
 			"ParameterLabels": {
@@ -19,12 +19,6 @@
 				},
 				"Sg": {
 					"default": "The security group for trafgen EC2"
-				},
-				"Sourceport": {
-					"default": "Source port of traffic"
-				},
-				"Destport": {
-					"default": "Destination port of traffic"
 				},
 				"Type": {
 					"default": "Network Traffic Load"
@@ -56,14 +50,6 @@
 		"Sg": {
 			"Description": "The Security Group that you want to associate with the trafgen server. Make sure that your egress rules in this SG are allowing whatever (UDP) destination port you have configured.",
 			"Type": "AWS::EC2::SecurityGroup::Id"
-		},
-
-		"Destport": {
-			"Description": "The destination port that trafgen will use. NOTE: it will always be UDP.",
-			"Type": "String",
-			"Default": "534",
-			"AllowedPattern": "(\\d{1,65535})",
-			"ConstraintDescription": "Must choose a valid destination port"
 		}
 	},
 
@@ -127,7 +113,7 @@
 						}, "Ubuntu"]
 				},
 				"InstanceMonitoring": "True",
-				"InstanceType": "m4.4xlarge",
+				"InstanceType": "c4.large",
 				"SecurityGroups": [{
 						"Ref": "Sg"
 					}
@@ -139,10 +125,6 @@
 								"# Set environment variables\n",
 								"export IP=", {
 									"Ref": "Target"
-								},
-								"\n",
-								"export DESTPORT=", {
-									"Ref": "Destport"
 								},
 								"\n",
 								"# Install necessary packages\n",
