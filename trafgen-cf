@@ -113,7 +113,7 @@
 						}, "Ubuntu"]
 				},
 				"InstanceMonitoring": "True",
-				"InstanceType": "c4.large",
+				"InstanceType": "c4.2xlarge",
 				"SecurityGroups": [{
 						"Ref": "Sg"
 					}
