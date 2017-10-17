@@ -28,4 +28,4 @@ done
 INTERFACE=$(ifconfig | awk 'FNR == 1 {print $1}')
 
 
-printf "{\n $DESTMAC\n $SOURCEMAC\n c16(0x0800),\n 0x45,0\n c16(1480),\n drnd(2),\n 0b01000000,0b00000000,\n 64,\n 17,\n csumip(14,33),\n $SOURCEIP\n $DESTIP\n drnd(10),\n drnd(10),\n const16(1460),\n const16(0),\n fill('B', 1452),\n}" | trafgen --in - --out $INTERFACE --cpp --jumbo-support
+printf "{\n $DESTMAC\n $SOURCEMAC\n c16(0x0800),\n 0x45,0\n c16(1500),\n drnd(2),\n 0b01000000,0b00000000,\n 64,\n 17,\n csumip(14,33),\n $SOURCEIP\n $DESTIP\n drnd(10),\n drnd(10),\n const16(1480),\n const16(0),\n fill('B', 1472),\n}" | trafgen --in - --out $INTERFACE --cpp --jumbo-support
